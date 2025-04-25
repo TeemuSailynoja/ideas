@@ -1,0 +1,103 @@
+---
+title: "A categorical PPC"
+author: "Teemu Säilynoja"
+format: gfm
+date: 2025-04-23
+---
+
+## Confusion uncertainty
+
+```{r}
+#| label: imports
+library(ggplot2)
+library(dplyr)
+library(bayesplot)
+```
+
+```{r}
+#| labels: demo_data
+set.seed(20250423)
+n_obs <- 100
+n_pred <- 400
+n_cats <- 4
+y <-
+  sample.int(n_cats, n_obs, TRUE)
+# y_pred <-
+# as.factor(example_y_data() %% n_cats)
+cats <- as.character(1:n_cats)
+p <- matrix(c(1,0,0,0,.25,.25,.25,.25, .8,.2,0,0, .7,.1,.1,.1), ncol = 4, byrow = TRUE)
+
+f <- function(y, p, sds = 0) {
+  sapply(y, \(y_)sample.int(4, 1, TRUE, scale(rnorm(4, p[y_,], sds), FALSE)))
+}
+
+
+data_gg <- data.frame(
+  id = rep(1:n_obs, n_pred),
+  y = y,
+  # as.factor(example_y_data() %% n_cats),
+  y_pred = c(replicate(n_pred, f(y, p, rep(0,4)))),
+  # factor(replicate(n_pred,sample.int(n_cats, n_obs, TRUE)), levels = cats),
+    # c(matrix(factor(round(rnorm(
+    #   n_obs * n_pred,
+    #   mean = as.numeric(y),
+    #   sd = c(.1, rep(1, n_obs - 1))
+    # ) %% n_cats), levels = cats), ncol = n_obs, byrow = FALSE)),
+  rep_id = rep(1:n_pred, each = n_obs)
+) |>
+  group_by(y, rep_id) |>
+  reframe(
+    pred_rate = as.vector(table(y_pred)[cats]) / n(),
+    y_pred = as.integer(cats)
+  ) |>
+  mutate(
+    # pred_rate = ifelse(y_pred == y, pred_rate, -pred_rate),
+    pred_rate = tidyr::replace_na(pred_rate, 0)
+  )
+```
+
+
+```{r}
+ggplot(data_gg) +
+  aes(x = -.5 + as.numeric(y) + 1/sqrt(n_pred) * rep_id %% sqrt(n_pred), y = n_cats + .5 - as.numeric(y_pred) - 1/sqrt(n_pred) * (rep_id - 1) %/% sqrt(n_pred), fill = pred_rate) +
+  geom_raster() +
+  geom_hline(yintercept = .55 + c(0:n_cats), color = "gray", alpha = .3) +
+  geom_vline(xintercept = .45 + c(1:n_cats), color = "gray", alpha = .3) +
+  scale_x_continuous(breaks = 1:n_cats, labels = cats) + 
+  scale_y_continuous(breaks = 1:n_cats, labels = rev(cats)) +
+  scale_fill_viridis_c(
+    option = "mako",
+    limits = c(0,1),
+    n.breaks = 3
+    ) +
+  coord_equal(xlim = c(.45, n_cats + .45), ylim = c(.5, n_cats + .45), expand = FALSE) +
+  # scale_fill_viridis_d(option = "H", direction = -1) +
+  labs(x = "True class", y = "Predicted class", fill = "Classification\nproportion") +
+  theme_minimal(base_size = 30, base_family = "sans") +
+  theme(panel.grid = element_blank())
+```
+
+```{r}
+# ggplot(data_gg |>
+#   group_by(y, y_pred) |>
+#   summarise(pred_rate_mean = mean(pred_rate),
+#   pred_rate_sd = 1 / var(pred_rate))|> ungroup() |> mutate(pred_rate_sd = pred_rate_sd / max(pred_rate_sd))
+#   )  +
+#   aes(x = as.numeric(y), y = as.numeric(y_pred), fill = pred_rate_mean, width =  .3 + .7 * pred_rate_sd,  height = .3 + .7 * pred_rate_sd) +
+#   geom_tile() +
+#   geom_hline(yintercept = -.5 + c(0:n_cats), color = "white", alpha = .2) +
+#   geom_vline(xintercept = -.5 + c(0:n_cats), color = "black", alpha = .2) +
+#   scale_x_continuous(breaks = 1:n_cats, labels = cats) +
+#   scale_y_continuous(breaks = 1:n_cats, labels = cats) +
+#   scale_fill_viridis_c(
+#     # low = "white",
+#     option = "inferno",
+#     limits = c(0, 1),
+#     n.breaks = 3
+#   ) +
+#   coord_equal(xlim = c(.5, n_cats + .5), ylim = c(-.5, n_cats - .5), expand = FALSE) +
+#   # scale_fill_viridis_d(option = "H", direction = -1) +
+#   labs(x = "True class", y = "Predicted class", fill = "Classification\nproportion") +
+#   theme_minimal(base_size = 30, base_family = "sans") +
+#   theme(panel.grid = element_blank())
+```
